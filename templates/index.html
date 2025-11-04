@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kidney Stone AI</title>
+  <link rel="stylesheet" href="../static/css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-content">
+      <div class="nav-logo">
+        <i class="fas fa-kidneys"></i>
+        <h1>Kidney Stone AI</h1>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main App -->
+  <div class="app-container">
+    <!-- Step 1: Upload -->
+    <div class="step upload-step active" id="uploadStep">
+      <div class="card">
+        <h2>Upload CT Scan</h2>
+        <p>Drag & drop your CT scan image or click to browse.</p>
+        <div class="upload-box" id="uploadBox">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Drag & drop an image here</p>
+          <p>or</p>
+          <button class="btn primary" id="browseBtn">Browse</button>
+          <input type="file" id="fileInput" accept="image/*" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Preview -->
+    <div class="step preview-step" id="previewStep">
+      <div class="card">
+        <div class="header-actions">
+          <button class="btn back" onclick="goBack('uploadStep')">
+            <i class="fas fa-arrow-left"></i> Back
+          </button>
+          <h2>Preview CT Scan</h2>
+        </div>
+        <div class="preview-box">
+          <img id="previewImage" alt="CT Scan Preview" />
+          <div class="preview-actions">
+            <button class="btn outline" onclick="replaceImage()">Replace Image</button>
+            <button class="btn primary" onclick="analyzeImage()">Analyze Now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Result -->
+    <div class="step result-step" id="resultStep">
+      <div class="card">
+        <div class="header-actions">
+          <button class="btn back" onclick="goBack('previewStep')">
+            <i class="fas fa-arrow-left"></i> Back
+          </button>
+          <h2>Analysis Result</h2>
+        </div>
+        <div class="result-content">
+          <div class="result-image-box">
+            <img id="resultImage" alt="Analyzed CT Scan" />
+          </div>
+          <div class="result-details">
+            <div class="result-icon">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 id="resultTitle">Analyzing...</h3>
+            <p id="resultText">Please wait while AI processes your scan.</p>
+            <div class="confidence-badge">Confidence: <span id="confidence">—</span></div>
+          </div>
+          <div class="action-buttons">
+            <button class="btn outline" onclick="resetToUpload()">Upload New Image</button>
+            <button class="btn success" onclick="showChatbot()">💬 AI Health Assistant</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Chatbot Button -->
+  <button class="chatbot-fab" id="chatbotFab">
+    <i class="fas fa-comments"></i>
+  </button>
+
+  <!-- Chatbot Sidebar -->
+  <div class="chatbot-sidebar" id="chatbotSidebar">
+    <div class="chatbot-header">
+      <h3>AI Kidney Health Assistant</h3>
+      <button class="close-chat" id="closeChatBtn">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="chat-messages" id="chatMessages">
+      <div class="message ai">
+        <div class="avatar"><i class="fas fa-robot"></i></div>
+        <div class="bubble">Hello! I’m your AI Kidney Health Assistant. How can I help you today?</div>
+      </div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="userMessage" placeholder="Ask about stones, treatment, or prevention..." />
+      <button id="sendChatBtn"><i class="fas fa-paper-plane"></i></button>
+    </div>
+  </div>
+
+  <script>
+    // DOM Elements
+    const uploadStep = document.getElementById('uploadStep');
+    const previewStep = document.getElementById('previewStep');
+    const resultStep = document.getElementById('resultStep');
+    const fileInput = document.getElementById('fileInput');
+    const previewImage = document.getElementById('previewImage');
+    const resultImage = document.getElementById('resultImage');
+    const resultText = document.getElementById('resultText');
+    const resultTitle = document.getElementById('resultTitle');
+    const confidenceEl = document.getElementById('confidence');
+
+    document.getElementById('browseBtn').addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    const uploadBox = document.getElementById('uploadBox');
+    uploadBox.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadBox.classList.add('drag-over');
+    });
+    uploadBox.addEventListener('dragleave', () => {
+      uploadBox.classList.remove('drag-over');
+    });
+    uploadBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadBox.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0) handleFile(files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files are supported.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        switchToStep(previewStep);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function analyzeImage() {
+    if (!fileInput.files[0]) {
+      alert("Please upload a CT Scan image first.");
+      return;
+    }
+
+    showLoading();
+    const formData = new FormData();
+    formData.append("image", fileInput.files[0]);
+
+    try {
+      const response = await fetch("http://localhost:5000/detect", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || "Detection failed");
+      }
+
+      // Ambil hasil image dari backend
+      const blob = await response.blob();
+      const imageUrl = URL.createObjectURL(blob);
+
+      // Tampilkan hasil di halaman
+      resultImage.src = imageUrl;
+      resultTitle.textContent = "AI Analysis Complete";
+      resultText.textContent = "Below is the processed image from AI model.";
+      confidenceEl.textContent = "—"; // bisa isi dengan nilai dari backend nanti
+      document.querySelector(".result-icon i").className = "fas fa-check-circle";
+
+      switchToStep(resultStep);
+    } catch (err) {
+      alert("Error: " + err.message);
+      console.error(err);
+    } finally {
+      hideLoading();
+    }
+  }
+
+    function replaceImage() {
+      fileInput.click();
+    }
+
+    function resetToUpload() {
+      switchToStep(uploadStep);
+      fileInput.value = '';
+      previewImage.src = '';
+      resultImage.src = '';
+      resultTitle.textContent = "Analyzing...";
+      resultText.textContent = "Please wait while AI processes your scan.";
+      confidenceEl.textContent = "—";
+    }
+
+    function goBack(stepId) {
+      switchToStep(document.getElementById(stepId));
+    }
+
+    function switchToStep(step) {
+      [uploadStep, previewStep, resultStep].forEach(s => s.classList.remove('active'));
+      step.classList.add('active');
+    }
+
+    function showLoading() {
+      document.body.style.cursor = 'wait';
+      const loader = document.createElement('div');
+      loader.id = 'globalLoader';
+      loader.innerHTML = '<div class="loader-spinner"></div><p>Analyzing your scan...</p>';
+      document.body.appendChild(loader);
+    }
+
+    function hideLoading() {
+      const loader = document.getElementById('globalLoader');
+      if (loader) loader.remove();
+      document.body.style.cursor = 'default';
+    }
+
+    function showChatbot() {
+      document.getElementById('chatbotSidebar').classList.add('active');
+    }
+
+    function hideChatbot() {
+      document.getElementById('chatbotSidebar').classList.remove('active');
+    }
+
+    document.getElementById('chatbotFab').addEventListener('click', showChatbot);
+    document.getElementById('closeChatBtn').addEventListener('click', hideChatbot);
+
+    document.getElementById('sendChatBtn').addEventListener('click', () => {
+      const input = document.getElementById('userMessage');
+      const msg = input.value.trim();
+      if (!msg) return;
+      addMessage(msg, 'user');
+      input.value = '';
+      setTimeout(() => {
+        const responses = [
+          "Stay well-hydrated—drink at least 2–3 liters of water daily to help pass small stones.",
+          "Avoid foods high in oxalate like spinach, nuts, and chocolate if you're prone to calcium oxalate stones.",
+          "Pain management: Over-the-counter NSAIDs like ibuprofen can help with discomfort. Consult your doctor.",
+          "Follow up with a urologist within 1–2 weeks for imaging and treatment planning.",
+          "Small stones (<5mm) often pass naturally. Larger ones may require lithotripsy or surgery.",
+          "Limit sodium intake—high salt increases calcium in urine, raising stone risk."
+        ];
+        const reply = responses[Math.floor(Math.random() * responses.length)];
+        addMessage(reply, 'ai');
+      }, 800);
+    });
+
+    function addMessage(text, sender) {
+      const messagesContainer = document.getElementById('chatMessages');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${sender}`;
+      messageDiv.innerHTML = `
+        <div class="avatar"><i class="fas fa-${sender === 'ai' ? 'robot' : 'user'}"></i></div>
+        <div class="bubble">${text}</div>
+      `;
+      messagesContainer.appendChild(messageDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  </script>
+</body>
+</html>
