@@ -1,0 +1,9 @@
+flask
+python-dotenv
+pymongo
+cloudinary
+google-generativeai
+ultralytics
+requests
+werkzeug
+protobuf

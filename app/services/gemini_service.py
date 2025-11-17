@@ -13,12 +13,13 @@ def describe_detected_image(image_path):
         prompt = """
         Gambar berikut adalah hasil deteksi batu ginjal menggunakan model YOLO.
         Analisis dan jelaskan gambar ini secara rinci dengan fokus pada hal-hal berikut:
-        1. Gambarkan secara singkat area deteksi.
-        2. Sebutkan jumlah bounding boxes.
-        3. Deskripsikan ukuran dan kepadatan area.
-        4. Beri tingkat risiko visual (Normal, Mild, Moderate, Severe, Critical).
-        5. Akhiri dengan anjuran pemeriksaan medis lanjutan.
-        Gunakan bahasa Indonesia profesional dan mudah dipahami.
+        1. Identifikasi lokasi batu ginjal: sebutkan apakah batu ginjal berada di ginjal sebelah kiri, sebelah kanan, atau kedua-duanya. Jika memungkinkan, sebutkan juga posisi spesifik (atas, tengah, bawah ginjal).
+        2. Gambarkan secara singkat area deteksi dan posisinya dalam gambar CT scan.
+        3. Sebutkan jumlah bounding boxes yang terdeteksi.
+        4. Deskripsikan ukuran dan kepadatan area deteksi.
+        5. Beri tingkat risiko visual (Normal, Mild, Moderate, Severe, Critical).
+        6. Akhiri dengan anjuran pemeriksaan medis lanjutan.
+        Gunakan bahasa Indonesia profesional dan mudah dipahami. Pastikan informasi lokasi (kiri/kanan) disebutkan dengan jelas di awal deskripsi.
         """
 
         response = model_gemini.generate_content([
