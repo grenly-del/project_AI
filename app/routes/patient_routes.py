@@ -304,3 +304,130 @@ def get_scan_detail(scan_id: str):
 
     current_app.logger.info(f"Scan found: {scan_id}")
     return jsonify(serialize_scan(scan))
+
+
+@patient_bp.route("/scans/<scan_id>", methods=["DELETE"])
+def delete_scan(scan_id: str):
+    """Delete a scan by its ID and optionally remove images from Cloudinary."""
+    db = get_db()
+    scans_col = db["scans"]
+    patients_col = db["patients"]
+
+    scan_id = unquote(scan_id)
+    current_app.logger.info(f"Deleting scan with ID: {scan_id}")
+
+    # Find the scan first
+    scan = None
+    try:
+        obj_id = ObjectId(scan_id)
+        scan = scans_col.find_one({"_id": obj_id})
+    except Exception as e:
+        current_app.logger.warning(f"Invalid scan id format: {scan_id}, error: {e}")
+        return jsonify({"error": "Invalid scan id"}), 400
+
+    if not scan:
+        return jsonify({"error": "Scan not found"}), 404
+
+    patient_id = scan.get("patientId")
+
+    # Try to delete Cloudinary images if URLs are present
+    cloudinary_paths = [
+        scan.get("imagePath"),
+        scan.get("annotatedImagePath"),
+        scan.get("gradCamPath"),
+    ]
+    for img_url in cloudinary_paths:
+        if img_url and "cloudinary" in str(img_url).lower():
+            try:
+                import cloudinary
+                import cloudinary.uploader
+
+                cloud_name = current_app.config.get("CLOUDINARY_CLOUD_NAME")
+                api_key = current_app.config.get("CLOUDINARY_API_KEY")
+                api_secret = current_app.config.get("CLOUDINARY_API_SECRET")
+
+                if all([cloud_name, api_key, api_secret]):
+                    cloudinary.config(
+                        cloud_name=cloud_name,
+                        api_key=api_key,
+                        api_secret=api_secret,
+                    )
+                    # Extract public_id from URL
+                    parts = img_url.split("/upload/")
+                    if len(parts) > 1:
+                        public_id = parts[1].rsplit(".", 1)[0]
+                        # Remove version prefix (e.g., v1234567890/)
+                        if public_id.startswith("v") and "/" in public_id:
+                            public_id = public_id.split("/", 1)[1]
+                        cloudinary.uploader.destroy(public_id)
+                        current_app.logger.info(f"Deleted Cloudinary image: {public_id}")
+            except Exception as cloud_err:
+                current_app.logger.warning(f"Failed to delete Cloudinary image: {cloud_err}")
+
+    # Delete the scan document
+    scans_col.delete_one({"_id": obj_id})
+
+    # Update patient aggregate (decrement totalScans)
+    if patient_id:
+        try:
+            patient_obj = None
+            try:
+                p_obj_id = ObjectId(patient_id)
+                patient_obj = patients_col.find_one({"_id": p_obj_id})
+            except Exception:
+                patient_obj = patients_col.find_one({"patientId": patient_id})
+
+            if patient_obj:
+                patient_mongo_id = patient_obj.get("_id")
+                current_total = patient_obj.get("totalScans", 1)
+                new_total = max(0, current_total - 1)
+
+                # Find latest remaining scan for lastScanDate
+                latest_scan = scans_col.find_one(
+                    {"patientId": patient_id},
+                    sort=[("scanDate", -1)],
+                )
+                new_last_scan_date = latest_scan.get("scanDate") if latest_scan else None
+
+                patients_col.update_one(
+                    {"_id": patient_mongo_id},
+                    {"$set": {"totalScans": new_total, "lastScanDate": new_last_scan_date}},
+                )
+        except Exception as e:
+            current_app.logger.warning(f"Failed to update patient aggregate after delete: {e}")
+
+    current_app.logger.info(f"Scan deleted successfully: {scan_id}")
+    return jsonify({"message": "Scan deleted successfully"}), 200
+
+
+@patient_bp.route("/patients/<patient_id>", methods=["DELETE"])
+def delete_patient(patient_id: str):
+    """Delete a patient and all associated scans."""
+    db = get_db()
+    patients_col = db["patients"]
+    scans_col = db["scans"]
+
+    patient_id = unquote(patient_id)
+    current_app.logger.info(f"Deleting patient with ID: {patient_id}")
+
+    # Find the patient
+    patient = None
+    try:
+        obj_id = ObjectId(patient_id)
+        patient = patients_col.find_one({"_id": obj_id})
+    except Exception:
+        patient = patients_col.find_one({"patientId": patient_id})
+
+    if not patient:
+        return jsonify({"error": "Patient not found"}), 404
+
+    patient_mongo_id = str(patient.get("_id"))
+
+    # Delete all scans for this patient
+    scans_col.delete_many({"patientId": patient_mongo_id})
+
+    # Delete the patient
+    patients_col.delete_one({"_id": patient.get("_id")})
+
+    current_app.logger.info(f"Patient and scans deleted: {patient_id}")
+    return jsonify({"message": "Patient and all scans deleted successfully"}), 200

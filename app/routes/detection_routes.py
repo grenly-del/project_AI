@@ -34,10 +34,10 @@ def detect():
         file.save(img_path)
         print(f"[DEBUG] File saved to: {img_path}")
 
-        # Run detection (model returns result image path, confidence, prediction, model_version)
+        # Run detection (model returns result image path, confidence, prediction, model_version, num_detections)
         print("[DEBUG] Running YOLO detection...")
-        result_img_path, confidence, prediction, model_version = detect_image(img_path, tmp_dir)
-        print(f"[DEBUG] Detection completed. Result image: {result_img_path}")
+        result_img_path, confidence, prediction, model_version, num_detections = detect_image(img_path, tmp_dir)
+        print(f"[DEBUG] Detection completed. Result image: {result_img_path}, Detections: {num_detections}")
 
         # Generate Grad-CAM visualization
         print("[DEBUG] Generating Grad-CAM visualization...")
@@ -58,7 +58,7 @@ def detect():
         # Describe image using Gemini
         print("[DEBUG] Generating description with Gemini...")
         try:
-            description = describe_detected_image(result_img_path)
+            description = describe_detected_image(result_img_path, confidence=confidence, prediction=prediction, num_detections=num_detections)
             print(f"[DEBUG] Description generated: {description[:100]}...")
         except Exception as ge:
             print(f"[DEBUG] Gemini describe failed: {ge}")
@@ -433,7 +433,7 @@ def detect_debug():
         file.save(img_path)
 
         # Run detection
-        result_img_path, confidence, prediction, model_version = detect_image(img_path, tmp_dir)
+        result_img_path, confidence, prediction, model_version, num_detections = detect_image(img_path, tmp_dir)
 
         # Read annotated image and encode as data URI
         try:
